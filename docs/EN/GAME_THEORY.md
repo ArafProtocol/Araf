@@ -21,44 +21,44 @@ flowchart TD
     classDef phase fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px,stroke-dasharray: 4
 
     %% Define Nodes
-    PAID(["🔵 STATE: PAID\n(Taker reports payment)"])
+    PAID(["🔵 STATE: PAID<br>(Taker reports payment)"])
     ActionRelease["Maker: releaseFunds()"]
-    ResOk((("✅ RESOLVED\n(Normal)")))
+    ResOk(("✅ RESOLVED<br>(Normal)"))
 
     ActionPingMaker["Taker: pingMaker()"]
     ActionAuto["Taker: autoRelease()"]
-    ResPen((("⚠️ RESOLVED\n(2% Penalty)")))
+    ResPen(("⚠️ RESOLVED<br>(2% Penalty)"))
 
     ActionPingTaker["Maker: pingTakerForChallenge()"]
     ActionChallenge["Maker: challengeTrade()"]
-    CHALLENGED(["🔴 STATE: CHALLENGED\n(Dispute Opened)"])
+    CHALLENGED(["🔴 STATE: CHALLENGED<br>(Dispute Opened)"])
 
     %% Define Connections
     PAID -->|"Happy Path"| ActionRelease
     ActionRelease --> ResOk
 
-    PAID -->|"Maker Inactive\n(Waits 48h)"| ActionPingMaker
-    ActionPingMaker -->|"No response\n(Waits 24h)"| ActionAuto
+    PAID -->|"Maker Inactive<br>(Waits 48h)"| ActionPingMaker
+    ActionPingMaker -->|"No response<br>(Waits 24h)"| ActionAuto
     ActionAuto --> ResPen
 
-    PAID -->|"Payment Missing\n(Waits 24h)"| ActionPingTaker
-    ActionPingTaker -->|"No resolution\n(Waits 24h)"| ActionChallenge
+    PAID -->|"Payment Missing<br>(Waits 24h)"| ActionPingTaker
+    ActionPingTaker -->|"No resolution<br>(Waits 24h)"| ActionChallenge
     ActionChallenge --> CHALLENGED
 
     %% Purgatory Subgraph
-    subgraph Purgatory [Dispute Resolution Phases]
+    subgraph Purgatory [Dispute Resolution Phases - Purgatory]
         direction TB
-        GRACE["🛡️ 48h Grace Period\n(No Fund Decay)"]
-        CANCELED((("🔄 CANCELED\n(Refunds Issued)")))
-        BLEEDING["🩸 10-Day Bleeding Phase\n(Hourly Decay Starts)"]
+        GRACE["🛡️ 48h Grace Period<br>(No Fund Decay)"]
+        CANCELED(("🔄 CANCELED<br>(Refunds Issued)"))
+        BLEEDING["🩸 10-Day Bleeding Phase<br>(Hourly Decay Starts)"]
         ActionBurn["Any: burnExpired()"]
-        BURNED((("💀 BURNED\n(Funds to Treasury)")))
+        BURNED(("💀 BURNED<br>(Funds to Treasury)"))
 
         CHALLENGED --> GRACE
-        GRACE -->|"Mutual Agreement\n(EIP-712)"| CANCELED
-        GRACE -->|"No Agreement\n(After 48h)"| BLEEDING
+        GRACE -->|"Mutual Agreement<br>(EIP-712)"| CANCELED
+        GRACE -->|"No Agreement<br>(After 48h)"| BLEEDING
         BLEEDING -->|"Mutual Agreement"| CANCELED
-        BLEEDING -->|"No Agreement\n(After 10 Days)"| ActionBurn
+        BLEEDING -->|"No Agreement<br>(After 10 Days)"| ActionBurn
         ActionBurn --> BURNED
     end
 
