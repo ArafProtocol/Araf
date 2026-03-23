@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ARAF PROTOCOL CUSTOM CSS */
+
+/* Scrollbar Gizleme Sınıfı (Yatay menüler için) */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Toast Bildirimi Zıplama Animasyonu */
+@keyframes bounce-in {
+    0% { transform: translate(-50%, 100%); opacity: 0; }
+    50% { transform: translate(-50%, -10%); opacity: 1; }
+    100% { transform: translate(-50%, 0); opacity: 1; }
+}
+.animate-bounce-in {
+    animation: bounce-in 0.4s ease-out forwards;
+}
+
+/* Araf Odası Yavaş Yanıp Sönme (Pulse) Animasyonu */
+@keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .6; }
+}
+.animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
