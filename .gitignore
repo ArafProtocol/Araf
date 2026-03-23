@@ -13,7 +13,7 @@ contracts/cache/
 contracts/coverage/
 contracts/coverage.json
 contracts/typechain-types/
-contracts/src/ArafEscrow.sol # Sonradan Paylaşılacak.
+contracts/src/ArafEscrow.sol
 
 # ─── Backend ─────────────────────────────────────────────────────────────────
 backend/dist/
