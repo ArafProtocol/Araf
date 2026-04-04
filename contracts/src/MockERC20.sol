@@ -2,27 +2,32 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title MockERC20 — Araf Testnet Faucet + Test Fixture Token
- * @dev Two mint paths:
  *
- *   1. mint()                — Rate-limited faucet for end-user testnet testing.
- *                              Max 1000 tokens every 1 hour per wallet.
+ * BACK-08 Fix: Admin mint() fonksiyonuna onlyOwner eklendi.
+ *   ÖNCEKİ: mint(address to, uint256 amount) herhangi bir erişim kısıtlaması içermiyordu.
+ *   Kontrat yanlışlıkla testnet veya mainnet ortamına bu haliyle deploy edilirse,
+ *   herhangi bir kullanıcı sınırsız miktarda token basarak protokolün tüm ekonomik
+ *   dengesini saniyeler içinde yok edebilirdi.
+ *   ŞİMDİ: onlyOwner modifier eklendi.
+ *   UYARI: Bu kontrat yalnızca geliştirme/testnet içindir. Mainnet'e ASLA deploy etmeyin.
  *
- *   2. mint(address, uint256) — Unrestricted admin mint for Hardhat test fixtures.
- *                               Allows deployAndSetupFixture() to set arbitrary
- *                               initial balances in a single call.
- *                               NOT available in production contracts.
+ * İki mint yolu:
+ *   1. mint()                — Kullanıcı faucet'i. Saatte 1000 token, rate-limited.
+ *   2. mint(address, uint256) — Test fixture kurulumu için. Sadece owner çağırabilir.
  */
-contract MockERC20 is ERC20 {
+contract MockERC20 is ERC20, Ownable {
     uint8 private _dec;
 
-    // Anti-spam: track last faucet mint time per wallet
+    // [TR] Anti-spam: Her cüzdan için son mint zamanı
     mapping(address => uint256) public lastMintTime;
 
     constructor(string memory name, string memory symbol, uint8 decimals_)
         ERC20(name, symbol)
+        Ownable(msg.sender)
     {
         _dec = decimals_;
     }
@@ -32,25 +37,27 @@ contract MockERC20 is ERC20 {
     }
 
     /**
-     * @notice Testnet faucet — rate-limited to 1000 tokens per hour per wallet.
+     * @notice Testnet faucet — Saatte 1000 token (rate-limited).
+     * @dev Herhangi bir kullanıcı çağırabilir.
      */
     function mint() external {
         require(
             block.timestamp >= lastMintTime[msg.sender] + 1 hours,
-            "MockERC20: You can only mint 1000 tokens every 1 hour"
+            "MockERC20: Saatte sadece 1000 token basabilirsiniz."
         );
         lastMintTime[msg.sender] = block.timestamp;
         _mint(msg.sender, 1000 * 10 ** decimals());
     }
 
     /**
-     * @notice Unrestricted admin mint for Hardhat test fixture setup.
-     * @dev Allows setting arbitrary initial balances without rate limits.
-     *      This function must NOT exist in production token contracts.
-     * @param to     Recipient address
-     * @param amount Amount to mint (token decimals)
+     * @notice Hardhat test fixture kurulumu için kısıtlı admin mint.
+     * @dev BACK-08 Fix: Sadece owner çağırabilir (onlyOwner eklendi).
+     *      Bu fonksiyon YALNIZCA test ortamında kullanılmalıdır.
+     *      Production token kontratlarında bu fonksiyon BULUNMAMALIDIR.
+     * @param to     Alıcı adres
+     * @param amount Basılacak miktar (token decimals cinsinden)
      */
-    function mint(address to, uint256 amount) external {
+    function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
     }
 }
