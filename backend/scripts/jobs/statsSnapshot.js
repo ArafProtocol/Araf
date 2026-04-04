@@ -22,7 +22,7 @@ async function computeCurrentStats() {
       { $match: { status: "RESOLVED" } },
       { $group: {
         _id: null,
-        totalVolume: { $sum: "$financials.crypto_amount" },
+        totalVolume: { $sum: "$financials.crypto_amount_num" },
         count:       { $sum: 1 },
         totalDurationMs: {
           $sum: {
@@ -43,7 +43,7 @@ async function computeCurrentStats() {
       { $match: { status: "BURNED" } },
       { $group: {
         _id: null,
-        totalDecayed: { $sum: "$financials.total_decayed" },
+        totalDecayed: { $sum: "$financials.total_decayed_num" },
       }},
     ]),
     // Aktif ilan sayısı
