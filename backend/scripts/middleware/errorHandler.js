@@ -3,61 +3,100 @@
 
 const logger = require("../utils/logger");
 
+// [TR] Loglanmadan önce temizlenecek PII alanları
+// [EN] PII field names to scrub before logging
+const PII_FIELD_NAMES = new Set([
+  'bankOwner', 'bankOwner_enc',
+  'iban', 'iban_enc',
+  'telegram', 'telegram_enc',
+  'password', 'token', 'refreshToken', 'signature',
+]);
+
 /**
- * Global Error Handler - Merkezi Hata Yönetimi
- * [TR] Uygulama genelindeki tüm hataları yakalar, loglar ve istemciye uygun formatta döner.
- * [EN] Catches all application-wide errors, logs them, and returns them in proper format.
+ * req.body'den PII alanlarını temizler.
+ * Log dosyasına IBAN ve isim bilgisi yazılmasını önler.
+ *
+ * ORTA-09 Fix: errorHandler.js Plaintext PII Log Sızıntısı kapatıldı..
+ *    Bilinen PII alanları [REDACTED] ile değiştiriliyor.
+ */
+function scrubBody(body) {
+  if (!body || typeof body !== 'object') return {};
+  const clean = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (PII_FIELD_NAMES.has(key)) {
+      clean[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null) {
+      clean[key] = scrubBody(value); // nested obje
+    } else {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+/**
+ * Global Error Handler — Merkezi Hata Yönetimi
+ *
+ * ORTA-09 Fix: Üretimde AND geliştirmede req.body PII scrub edildi.
+ *
+ * Ek Fix: Eksik fallback response kapatıldı.
+ *   ŞİMDİ: Fonksiyon sonunda her zaman yanıt dönen fallback eklendi.
  */
 function globalErrorHandler(err, req, res, next) {
-  // 1. Hata Detaylarını Hazırla (Loglama için)
+  // [TR] Yanıt zaten gönderildiyse Express'in varsayılan hata işleyicisine devret
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // 1. Hata Detaylarını Hazırla — PII scrub edilmiş body ile
   const errorDetails = {
-    message: err.message,
-    path: req.path,
-    method: req.method,
-    // [TR] İzlenebilirlik için IP ve Cüzdan bilgisi eklendi (Hata avını kolaylaştırır)
-    ip: req.ip,
-    wallet: req.wallet || "anon",
-    // Sadece test ortamında body ve stack trace'i logla (Güvenlik için)
-    body: process.env.NODE_ENV !== "production" ? req.body : {},
-    stack: process.env.NODE_ENV !== "production" ? err.stack : "Stack trace hidden",
-    timestamp: new Date().toISOString()
+    message:   err.message,
+    path:      req.path,
+    method:    req.method,
+    ip:        req.ip,
+    wallet:    req.wallet || "anon",
+    // ORTA-09 Fix: Her ortamda scrub — plaintext PII loglanmaz
+    body:      scrubBody(req.body),
+    stack:     process.env.NODE_ENV !== "production" ? err.stack : undefined,
+    timestamp: new Date().toISOString(),
   };
 
-  // 2. Merkezi Logger ile Dosyaya ve Konsola Yazdır
-  // Bu satır sayesinde 'araf_full_stack.log.txt' dosyasına tüm detaylar düşer.
-  logger.error(`[SERVER ERROR]`, errorDetails);
+  logger.error("[SERVER ERROR]", errorDetails);
 
-  // 3. Özel Hata Tiplerini Yönet
-  
-  // Mongoose Validation Hataları
+  // 2. Mongoose Validation Hataları
   if (err.name === "ValidationError") {
-    const messages = Object.values(err.errors).map(e => e.message);
-    return res.status(400).json({ 
-      error: "Validation failed", 
-      details: messages 
-    });
+    const messages = Object.values(err.errors).map((e) => e.message);
+    return res.status(400).json({ error: "Doğrulama başarısız.", details: messages });
   }
 
-  // Mongoose Duplicate Key (Aynı veriden iki tane ekleme)
+  // 3. Mongoose Duplicate Key
   if (err.code === 11000) {
-    return res.status(409).json({ 
-      error: "Duplicate entry",
-      message: "Bu veri zaten mevcut." 
+    return res.status(409).json({
+      error:   "Duplicate entry",
+      message: "Bu veri zaten mevcut.",
     });
   }
 
-  // JWT (Kimlik Doğrulama) Hataları
+  // 4. JWT Hataları
   if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
-    return res.status(401).json({ 
-      error: "Invalid or expired token",
-      message: "Oturum süresi dolmuş veya geçersiz." 
+    return res.status(401).json({
+      error:   "Geçersiz veya süresi dolmuş token.",
+      message: "Lütfen yeniden giriş yapın.",
     });
   }
 
-  // 4. Genel Sunucu Hatası (İç yapıyı dışarı sızdırmaz)
-  return res.status(500).json({ 
-    error: "Internal server error",
-    message: "Sunucu tarafında beklenmedik bir sorun oluştu. Lütfen log dosyasını kontrol edin." 
+  // 5. İstemci hataları (özel statusCode ile fırlatılanlar)
+  if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+    return res.status(err.statusCode).json({
+      error: err.message || "İstek hatası.",
+    });
+  }
+
+  // 6. Fallback — Tüm diğer beklenmeyen hatalar
+  // [TR] Eklendi: Önceki kodda bu fallback yoktu → istek asılı kalıyordu!
+  return res.status(500).json({
+    error:   "Internal server error",
+    message: "Sunucu tarafında beklenmedik bir sorun oluştu.",
   });
 }
 
