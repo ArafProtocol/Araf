@@ -173,6 +173,22 @@ describe("ArafEscrow", function () {
   // 1. HAPPY PATH
   // ═══════════════════════════════════════════════════════════════════════════
   describe("Happy Path", () => {
+    it("emits authoritative listingRef when provided", async () => {
+      const listingRef = ethers.keccak256(ethers.toUtf8Bytes("listing:test-ref"));
+      const tx = await escrow.connect(maker)["createEscrow(address,uint256,uint8,bytes32)"](
+        await mockUSDT.getAddress(),
+        TRADE_AMOUNT,
+        2,
+        listingRef
+      );
+      const receipt = await tx.wait();
+      const log = receipt.logs.find((l) => {
+        try { return escrow.interface.parseLog(l).name === "EscrowCreated"; }
+        catch { return false; }
+      });
+      const parsed = escrow.interface.parseLog(log);
+      expect(parsed.args.listingRef).to.equal(listingRef);
+    });
 
     it("full trade lifecycle: OPEN → LOCKED → PAID → RESOLVED", async () => {
       const tradeId = await setupTrade(2);
@@ -980,6 +996,31 @@ describe("ArafEscrow", function () {
 
       await expect(escrow.decayReputation(maker.address))
         .to.be.revertedWithCustomError(escrow, "NoBansToReset");
+    });
+
+    it("removes tier penalty ceiling after clean-slate decay", async () => {
+      // 2. ban seviyesine gelerek maxAllowedTier=3 tavanını uygula
+      for (let i = 0; i < 3; i++) {
+        const tradeId = await setupTrade(0);
+        await escrow.connect(taker).lockEscrow(tradeId);
+        await escrow.connect(taker).reportPayment(tradeId, `QmDecay${i}`);
+        await time.increase(FORTY_EIGHT_H + 1);
+        await escrow.connect(taker).pingMaker(tradeId);
+        await time.increase(TWENTY_FOUR_H + 1);
+        await escrow.connect(taker).autoRelease(tradeId);
+      }
+
+      let [,, bannedUntil,, effectiveTierBefore] = await escrow.getReputation(maker.address);
+      expect(effectiveTierBefore).to.equal(3);
+
+      await time.increase(
+        (bannedUntil - BigInt(await time.latest())) + BigInt(180 * 24 * 3600) + 3601n
+      );
+
+      await escrow.decayReputation(maker.address);
+
+      const [,,,, effectiveTierAfter] = await escrow.getReputation(maker.address);
+      expect(effectiveTierAfter).to.equal(4);
     });
   });
 });
