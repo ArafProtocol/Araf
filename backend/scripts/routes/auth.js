@@ -153,7 +153,7 @@ router.post("/verify", authLimiter, async (req, res) => {
     logger.info(`[Auth] Giriş başarılı: ${wallet}`);
     
     // [EKLE] Token'ı Farcaster (Frame v2) istemcisinin alabilmesi için body'de dön
-    const isFarcaster = req.headers["x-farcaster-mode"] === "true" || true; // Frontend hibrit auth ile okuyacak
+    const isFarcaster = req.headers["x-farcaster-mode"] === "true";
     
     return res.json({ 
       wallet, 
