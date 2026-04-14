@@ -56,6 +56,25 @@ const StatChange = ({ value }) => {
 
 const DEFAULT_TOKEN_DECIMALS = 6;
 
+// [TR] Ağ listesi App içinde tutulur; harici dosya oluşturmadan tek davranış korunur.
+// [EN] Chain list is defined inside App to keep behavior consistent without extra files.
+const CHAIN_LABELS = {
+  8453: 'Base Mainnet',
+  84532: 'Base Sepolia',
+  31337: 'Hardhat Local',
+};
+
+const getSupportedChainsMap = () => {
+  if (import.meta.env.PROD) {
+    const id = Number(import.meta.env.VITE_ALLOWED_CHAIN_ID || 84532);
+    return { [id]: CHAIN_LABELS[id] || `Chain ${id}` };
+  }
+  return CHAIN_LABELS;
+};
+
+const isSupportedChain = (chainId) => Boolean(getSupportedChainsMap()[chainId]);
+const getSupportedChainNamesText = () => Object.values(getSupportedChainsMap()).join(' veya ');
+
 // [TR] Otoritatif raw base-unit değerini UI için normalize eder (display-only).
 // [EN] Normalizes authoritative raw base-unit values for UI display only.
 const formatTokenAmountFromRaw = (rawAmount, decimals = DEFAULT_TOKEN_DECIMALS, maxFractionDigits = 4) => {
@@ -2853,7 +2872,9 @@ function App() {
             const canTakeOrder = isConnected && isAuthenticated && !isMyOwnAd && !isTierLocked && !isPaused;
             const tokenAddr    = SUPPORTED_TOKEN_ADDRESSES[order.crypto || 'USDT'];
             const isTokenConfigured = Boolean(tokenAddr);
-            const isCorrectChain    = [8453, 84532, 31337].includes(chainId);
+            // [TR] Ağ doğrulaması App içindeki tek yardımcı fonksiyonlardan gelir.
+            // [EN] Chain validation comes from in-file helper functions.
+            const isCorrectChain    = isSupportedChain(chainId);
             const isFunded          = sybilStatus ? sybilStatus.funded : true;
             const isCooldownOk      = sybilStatus ? sybilStatus.cooldownOk : true;
             const finalCanTakeOrder = canTakeOrder && isCooldownOk && isFunded && !isPaused && isTokenConfigured && isCorrectChain;
@@ -3357,9 +3378,9 @@ if (activeTrade?._pendingBackendSync && !activeTrade?.id) {
         </div>
       )}
 
-      {isConnected && ![8453, 84532, 31337].includes(chainId) && (
+      {isConnected && !isSupportedChain(chainId) && (
         <div className="absolute top-0 left-0 right-0 z-[80] bg-red-950/95 backdrop-blur border-b border-red-800 px-6 py-2 flex justify-center items-center shadow-xl">
-          <span className="text-sm font-bold text-red-200">⚠️ {lang === 'TR' ? 'Yanlış Ağ! Lütfen cüzdanınızdan Base Sepolia ağına geçin.' : 'Wrong Network! Please switch to Base Sepolia in your wallet.'}</span>
+          <span className="text-sm font-bold text-red-200">⚠️ {lang === 'TR' ? `Yanlış Ağ! Lütfen desteklenen ağa geçin: ${getSupportedChainNamesText()}.` : `Wrong Network! Please switch to a supported chain: ${getSupportedChainNamesText()}.`}</span>
         </div>
       )}
 
