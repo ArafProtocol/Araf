@@ -147,8 +147,12 @@ router.post('/refresh', authLimiter, async (req, res) => {
 
 router.post('/logout', requireAuth, async (req, res, next) => {
   try {
+    if (req.authRawToken) {
+      await blacklistJWT(req.authRawToken)
+    }
+
     const currentJWT = req.cookies?.araf_jwt
-    if (currentJWT) {
+    if (currentJWT && currentJWT !== req.authRawToken) {
       await blacklistJWT(currentJWT)
     }
 
