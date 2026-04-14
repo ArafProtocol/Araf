@@ -366,83 +366,108 @@ function App() {
     } catch (_) {}
   }, []);
 
-  // [TR] HTTP-Only Cookie tabanlı kimlik doğrulamalı fetch wrapper.
-  //      401 alırsa refresh token ile yeniler, başarısızsa oturumu sona erdirir.
-  // [EN] Cookie-based authenticated fetch wrapper.
-  //      On 401, attempts token refresh; on failure, ends the session.
-  const authenticatedFetch = React.useCallback(async (url, options = {}) => {
-  const walletHeader = connectedWallet ? { 'x-wallet-address': connectedWallet } : {};
-  
-  // [EKLE] Farcaster Hibrit Auth: Token varsa Authorization header'ı oluştur
-  const farcasterToken = typeof window !== 'undefined' ? sessionStorage.getItem('araf_farcaster_token') : null;
-  const authHeader = farcasterToken ? { 'Authorization': `Bearer ${farcasterToken}` } : {};
+  // [TR] Frame token'ı yalnızca sessionStorage'dan okunur; refresh token asla browser storage'a yazılmaz.
+  // [EN] Frame token is read only from sessionStorage; refresh token is never written to browser storage.
+  const getStoredFrameToken = React.useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('araf_farcaster_token');
+  }, []);
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
+  // [TR] Tüm authenticated API çağrılarında tek header üretim noktası.
+  // [EN] Single header builder for all authenticated API calls.
+  const buildAuthHeaders = React.useCallback((extraHeaders = {}) => {
+    const headers = {
       'Content-Type': 'application/json',
-      ...options.headers,
-      ...walletHeader,
-      ...authHeader, // [EKLE] Farcaster Header'ı ekle
-    },
-    credentials: 'include',
-  });
+      ...extraHeaders,
+    };
 
-  if (res.status === 409) {
-    try {
-      await fetch(`${API_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (_) {}
+    if (connectedWallet) {
+      headers['x-wallet-address'] = connectedWallet;
+    }
 
-    clearLocalSessionState();
-    showToast(
-      lang === 'TR'
-        ? 'Oturum cüzdan uyuşmazlığı nedeniyle sonlandırıldı. Lütfen yeniden giriş yapın.'
-        : 'Session ended due to wallet mismatch. Please sign in again.',
-      'error'
-    );
-    return res;
-  }
+    const frameToken = getStoredFrameToken();
+    if (frameToken) {
+      headers.Authorization = `Bearer ${frameToken}`;
+    }
 
-  if (res.status !== 401) return res;
+    return headers;
+  }, [connectedWallet, getStoredFrameToken]);
 
-  try {
-    const refreshRes = await fetch(`${API_URL}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+  // [TR] Hibrit auth wrapper: frame bearer ile gelen 401'de refresh denemeden yeniden SIWE ister.
+  // [EN] Hybrid auth wrapper: for 401 with frame bearer, skips refresh and asks for SIWE again.
+  const authenticatedFetch = React.useCallback(async (url, options = {}) => {
+    const headers = buildAuthHeaders(options.headers || {});
+    const usingFrameAuth = Boolean(getStoredFrameToken());
+
+    const res = await fetch(url, {
+      ...options,
+      headers,
       credentials: 'include',
-      body: JSON.stringify({ wallet: address?.toLowerCase() }),
     });
 
-    if (!refreshRes.ok) {
-      console.warn('[Auth] Refresh token expired — re-login required');
+    if (res.status === 409) {
+      try {
+        await fetch(`${API_URL}/api/auth/logout`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+      } catch (_) {}
+
       clearLocalSessionState();
       showToast(
         lang === 'TR'
-          ? 'Oturumunuz sona erdi. Lütfen tekrar imzalayın.'
-          : 'Session expired. Please sign in again.',
+          ? 'Oturum cüzdan uyuşmazlığı nedeniyle sonlandırıldı. Lütfen yeniden giriş yapın.'
+          : 'Session ended due to wallet mismatch. Please sign in again.',
         'error'
       );
       return res;
     }
 
-    return fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-        ...walletHeader,
-        ...authHeader, // [EKLE] Retry işleminde de gönder
-      },
-      credentials: 'include',
-    });
-  } catch (err) {
-    console.error('[Auth] Refresh failed:', err);
-    return res;
-  }
-}, [connectedWallet, address, lang, clearLocalSessionState]);
+    if (res.status !== 401) return res;
+
+    if (usingFrameAuth) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('araf_farcaster_token');
+      }
+      clearLocalSessionState();
+      showToast(
+        lang === 'TR'
+          ? 'Miniapp oturumu sona erdi. Lütfen tekrar imzalayın.'
+          : 'Miniapp session expired. Please sign in again.',
+        'error'
+      );
+      return res;
+    }
+
+    try {
+      const refreshRes = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ wallet: address?.toLowerCase() }),
+      });
+
+      if (!refreshRes.ok) {
+        clearLocalSessionState();
+        showToast(
+          lang === 'TR'
+            ? 'Oturumunuz sona erdi. Lütfen tekrar imzalayın.'
+            : 'Session expired. Please sign in again.',
+          'error'
+        );
+        return res;
+      }
+
+      return fetch(url, {
+        ...options,
+        headers: buildAuthHeaders(options.headers || {}),
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('[Auth] Refresh failed:', err);
+      return res;
+    }
+  }, [address, lang, clearLocalSessionState, buildAuthHeaders, getStoredFrameToken]);
 
   // [TR] Sayfa yüklendiğinde mevcut oturumu kontrol eder
   // [EN] Checks existing session on page load
@@ -455,7 +480,7 @@ function App() {
 
   fetch(`${API_URL}/api/auth/me`, {
     credentials: 'include',
-    headers: { 'x-wallet-address': connectedWallet },
+    headers: buildAuthHeaders(),
   })
     .then(async (res) => {
       // Backend mismatch'i açıkça 409 ile bildirirse bunu sessizce restore etmeyiz.
@@ -510,7 +535,7 @@ function App() {
       clearLocalSessionState();
       setAuthChecked(true);
     });
-}, [isConnected, connectedWallet, clearLocalSessionState, bestEffortBackendLogout, lang]);
+}, [isConnected, connectedWallet, clearLocalSessionState, bestEffortBackendLogout, lang, buildAuthHeaders]);
 
   // [TR] Pazar yeri ilanlarını çeker — herkese açık endpoint
   // [EN] Fetches marketplace listings — public endpoint
