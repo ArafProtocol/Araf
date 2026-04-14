@@ -7,21 +7,21 @@
   "frame": {
     "version": "1",
     "name": "Araf Protocol",
-    "iconUrl": "https://app.araf.xyz/icon.svg",
+    "iconUrl": "https://app.araf.xyz/icon.png",
     "homeUrl": "https://app.araf.xyz",
-    "imageUrl": "https://app.araf.xyz/og-image.svg",
+    "imageUrl": "https://app.araf.xyz/og-image.png",
     "buttonTitle": "Araf'ı Başlat",
-    "splashImageUrl": "https://app.araf.xyz/splash.svg",
+    "splashImageUrl": "https://app.araf.xyz/splash.png",
     "splashBackgroundColor": "#060608"
   },
   "miniapp": {
     "version": "1",
     "name": "Araf Protocol",
-    "iconUrl": "https://app.araf.xyz/icon.svg",
+    "iconUrl": "https://app.araf.xyz/icon.png",
     "homeUrl": "https://app.araf.xyz",
-    "imageUrl": "https://app.araf.xyz/og-image.svg",
+    "imageUrl": "https://app.araf.xyz/og-image.png",
     "buttonTitle": "Araf'ı Başlat",
-    "splashImageUrl": "https://app.araf.xyz/splash.svg",
+    "splashImageUrl": "https://app.araf.xyz/splash.png",
     "splashBackgroundColor": "#060608"
   }
 }
