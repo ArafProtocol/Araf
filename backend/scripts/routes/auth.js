@@ -21,16 +21,24 @@ const { encryptPII } = require('../services/encryption')
 const User = require('../models/User')
 const logger = require('../utils/logger')
 
+const COOKIE_SAMESITE = String(process.env.COOKIE_SAMESITE || 'lax').toLowerCase()
+const VALID_SAMESITE = new Set(['lax', 'strict', 'none'])
+if (!VALID_SAMESITE.has(COOKIE_SAMESITE)) {
+  throw new Error("COOKIE_SAMESITE geçersiz. 'lax' | 'strict' | 'none' olmalı.")
+}
+
 const COOKIE_OPTIONS_BASE = {
   httpOnly: true,
-  sameSite: 'lax',
+  // [TR] Miniapp iframe auth devamlılığı için SameSite env ile yönetilir.
+  // [EN] SameSite is env-driven to preserve miniapp iframe auth continuity.
+  sameSite: COOKIE_SAMESITE,
   path: '/',
 }
 
 function getJwtCookieOptions() {
   return {
     ...COOKIE_OPTIONS_BASE,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || COOKIE_SAMESITE === 'none',
     maxAge: 15 * 60 * 1000,
   }
 }
@@ -38,7 +46,7 @@ function getJwtCookieOptions() {
 function getRefreshCookieOptions() {
   return {
     ...COOKIE_OPTIONS_BASE,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || COOKIE_SAMESITE === 'none',
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/api/auth',
   }
