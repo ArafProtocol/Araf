@@ -35,8 +35,7 @@ const NETWORK_CONFIG = {
   "base-sepolia": {
     displayName: "Base Sepolia",
     expectedChainId: 84532,
-    tokenStrategy: "env",
-    usdtEnv: "BASE_SEPOLIA_USDT_ADDRESS",
+    tokenStrategy: "mock-usdt-official-usdc",
     usdcEnv: "BASE_SEPOLIA_USDC_ADDRESS",
     autoWriteFrontendEnv: true,
     frontendAllowedChainId: 84532,
@@ -92,6 +91,16 @@ function upsertEnvLine(content, key, value) {
   return `${content}${needsTrailingNewline ? "\n" : ""}${line}\n`;
 }
 
+async function deployMockToken(symbol) {
+  console.log(`\n⏳ MockERC20 (${symbol}) deploy ediliyor...`);
+  const MockERC20 = await ethers.getContractFactory("MockERC20");
+  const token = await MockERC20.deploy(`Mock ${symbol}`, symbol, 6);
+  await token.waitForDeployment();
+  const tokenAddress = await token.getAddress();
+  console.log(`✅ Mock${symbol} deploy edildi:`, tokenAddress);
+  return tokenAddress;
+}
+
 async function enableAndVerifySupportedToken(escrow, tokenAddress, symbol) {
   const setTx = await escrow.setSupportedToken(tokenAddress, true);
   await setTx.wait();
@@ -107,18 +116,18 @@ async function enableAndVerifySupportedToken(escrow, tokenAddress, symbol) {
 
 async function resolveTokenConfig(config) {
   if (config.tokenStrategy === "mock") {
-    console.log("\n⏳ MockERC20 (USDT ve USDC) deploy ediliyor...");
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
+    const usdtAddress = await deployMockToken("USDT");
+    const usdcAddress = await deployMockToken("USDC");
 
-    const usdt = await MockERC20.deploy("Mock USDT", "USDT", 6);
-    await usdt.waitForDeployment();
-    const usdtAddress = await usdt.getAddress();
-    console.log("✅ MockUSDT deploy edildi:", usdtAddress);
+    return { usdtAddress, usdcAddress };
+  }
 
-    const usdc = await MockERC20.deploy("Mock USDC", "USDC", 6);
-    await usdc.waitForDeployment();
-    const usdcAddress = await usdc.getAddress();
-    console.log("✅ MockUSDC deploy edildi:", usdcAddress);
+  if (config.tokenStrategy === "mock-usdt-official-usdc") {
+    const usdtAddress = await deployMockToken("USDT");
+    const usdcAddress = requireEnvAddress(config.usdcEnv);
+
+    console.log(`\n⏳ ${config.displayName} resmi USDC adresi ENV'den alındı...`);
+    console.log(`✅ ${config.usdcEnv}:`, usdcAddress);
 
     return { usdtAddress, usdcAddress };
   }
